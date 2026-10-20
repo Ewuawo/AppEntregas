@@ -54,20 +54,24 @@
 
             let bounds = L.latLngBounds(); // Para calcular el zoom
 
-            entregas.forEach(entrega => {
-                if (entrega.latitud && entrega.longitud) {
-                    const marker = L.marker([entrega.latitud, entrega.longitud], {icon: iconoEntrega}).addTo(map);
-                    marker.bindPopup(`<b>🛵 ${entrega.destinatario}</b><br>📍 ${entrega.direccion}`);
-                    marcadores.push(marker);
-                    bounds.extend([entrega.latitud, entrega.longitud]);
-
-                    // Si esta entrega es la que acabamos de guardar, centramos el mapa ahí
-                    if (moverMapaA && moverMapaA === entrega.destinatario) {
-                        map.setView([entrega.latitud, entrega.longitud], 16); // Zoom 16
-                        marker.openPopup(); // Abrimos el cartelito
-                    }
-                }
-            });
+        entregas.forEach(entrega => {
+    if (entrega.latitud && entrega.longitud) {
+        const marker = L.marker([entrega.latitud, entrega.longitud], {icon: iconoEntrega}).addTo(map);
+        
+        // Creamos el botón de completar dentro del popup
+        const botonHtml = `
+            <div style="text-align: center; margin-top: 10px;">
+                <button onclick="completarEntrega(${entrega.id})" style="background-color: #28a745; color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; font-weight: bold;">
+                    ✅ Marcar como Entregado
+                </button>
+            </div>
+        `;
+        
+        marker.bindPopup(`<b>🛵 ${entrega.destinatario}</b><br>📍 ${entrega.direccion}${botonHtml}`);
+        marcadores.push(marker);
+        bounds.extend([entrega.latitud, entrega.longitud]);
+    }
+});
             
             // Si no hay que centrar en ninguna, que el mapa encuadre todos los pines
             if (!moverMapaA && marcadores.length > 0) {
@@ -113,7 +117,12 @@
                 btn.disabled = false;
             }
         }
-
+        async function completarEntrega(id) {
+    if(confirm("¿Confirmás que esta entrega ya fue realizada?")) {
+        await fetch(`/api/entregas/${id}/completar`, { method: 'PUT' });
+        cargarEntregas(); // Recarga el mapa y hace desaparecer la motito porque ya no está "pendiente"
+    }
+}
         // Cargar al iniciar
         cargarEntregas();
     </script>

@@ -112,6 +112,14 @@ def agregar_entrega():
     conn.commit()
     nuevo_id = cursor.lastrowid
     conn.close()
+
+@app.route("/api/entregas/<int:id>/completar", methods=["PUT"])
+def completar_entrega(id):
+    conn = get_db_connection()
+    conn.execute('UPDATE entregas SET estado = "entregado" WHERE id = ?', (id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"mensaje": "Entrega completada"}), 200
     
     # Pequeña pausa para no saturar el servidor de mapas gratuito
     
