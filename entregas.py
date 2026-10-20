@@ -38,13 +38,13 @@ init_db()
 import requests
 
 def obtener_coordenadas(direccion):
-    # Endpoint de Georef
     url = "https://apis.datos.gob.ar/georef/api/direcciones"
     
-    # Intento 1: Buscar la dirección exacta en Corrientes
+    # Intento 1: Dirección exacta limitada a la localidad de Corrientes
     params_exacto = {
         "direccion": direccion,
         "provincia": "Corrientes",
+        "localidad": "Corrientes", # <-- Esto es la clave
         "max": 1
     }
     
@@ -52,18 +52,21 @@ def obtener_coordenadas(direccion):
         response = requests.get(url, params=params_exacto, timeout=5)
         data = response.json()
         
-        # Si encuentra algo...
         if data.get("direcciones") and len(data["direcciones"]) > 0:
             ubicacion = data["direcciones"][0].get("ubicacion")
             if ubicacion:
-                return float(ubicacion["lat"]), float(ubicacion["lon"])
+                lat, lon = float(ubicacion["lat"]), float(ubicacion["lon"])
+                # Corrientes Capital está aprox entre lat -27.3 a -27.6 y lon -58.7 a -58.9
+                # Verificamos que no se haya ido a otra provincia o localidad lejana
+                if -27.7 < lat < -27.3 and -59.0 < lon < -58.6:
+                    return lat, lon
                 
-        # Intento 2: Si falló, intentamos buscar solo la calle (por si la altura no existe)
-        # Ej: Si "Bolivar 1334" falla, buscamos "Bolivar"
-        calle = direccion.split()[0] # Agarramos la primera palabra
+        # Intento 2: Si falló la altura exacta, buscar solo la calle
+        calle = direccion.split()[0] 
         params_calle = {
             "direccion": calle,
             "provincia": "Corrientes",
+            "localidad": "Corrientes",
             "max": 1
         }
         response_calle = requests.get(url, params=params_calle, timeout=5)
@@ -72,12 +75,13 @@ def obtener_coordenadas(direccion):
         if data_calle.get("direcciones") and len(data_calle["direcciones"]) > 0:
             ubicacion_calle = data_calle["direcciones"][0].get("ubicacion")
             if ubicacion_calle:
-                return float(ubicacion_calle["lat"]), float(ubicacion_calle["lon"])
+                lat, lon = float(ubicacion_calle["lat"]), float(ubicacion_calle["lon"])
+                if -27.7 < lat < -27.3 and -59.0 < lon < -58.6:
+                    return lat, lon
 
     except Exception as e:
         print(f"Error consultando Georef para '{direccion}':", e)
     
-    # Si no encontró nada de nada
     return None, None
 
 @app.route("/")
