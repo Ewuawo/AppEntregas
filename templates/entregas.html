@@ -11,69 +11,60 @@
     <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script>
     
     <style>
-        body { font-family: Arial, sans-serif; margin: 0; padding: 15px; background-color: #f8f9fa; }
+        body { font-family: Arial, sans-serif; margin: 0; padding: 10px; background-color: #f8f9fa; }
         
-        /* Panel de contadores */
         .panel-contadores { 
-            background: #0056b3; 
-            color: white; 
-            padding: 15px; 
-            border-radius: 8px; 
-            margin-bottom: 15px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            background: #0056b3; color: white; padding: 15px; border-radius: 8px; 
+            margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
         .contador-num { font-size: 24px; font-weight: bold; }
 
+        /* Formulario: Por defecto se ve (PC) */
         .formulario { background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .formulario input { padding: 8px; margin-right: 5px; margin-bottom: 5px; border: 1px solid #ccc; border-radius: 4px; }
         
-        /* Layout de dos columnas para PC, una para celular */
-        .contenedor-principal {
-            display: flex;
-            gap: 15px;
-            flex-wrap: wrap;
-        }
+        .contenedor-principal { display: flex; gap: 15px; flex-wrap: wrap; }
         
         .lista-entregas {
-            flex: 1;
-            min-width: 300px;
-            background: white;
-            border-radius: 8px;
-            padding: 10px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            max-height: 500px;
-            overflow-y: auto;
+            flex: 1; min-width: 300px; background: white; border-radius: 8px; padding: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); max-height: 500px; overflow-y: auto;
         }
         
-        .mapa-contenedor {
-            flex: 2;
-            min-width: 300px;
-            border-radius: 8px;
-            overflow: hidden;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-
+        .mapa-contenedor { flex: 2; min-width: 300px; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         #map { height: 500px; width: 100%; }
 
-        /* Tarjeta de cada entrega en la lista */
         .tarjeta-entrega {
-            border-bottom: 1px solid #eee;
-            padding: 10px 0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            border-bottom: 1px solid #eee; padding: 10px 0; display: flex; justify-content: space-between; align-items: center;
         }
         .tarjeta-entrega:last-child { border-bottom: none; }
         .info-entrega h4 { margin: 0 0 5px 0; color: #333; }
         .info-entrega p { margin: 0; font-size: 13px; color: #666; }
         
-        .botones-accion button {
-            display: block; width: 100%; margin-top: 5px; padding: 5px 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;
-        }
+        .botones-accion button { display: block; width: 100%; margin-top: 5px; padding: 5px 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; }
         .btn-entregado { background-color: #28a745; color: white; }
         .btn-ruta { background-color: #007bff; color: white; }
+
+        /* Botón para ocultar lista (solo visible en celular) */
+        .btn-toggle-lista { display: none; width: 100%; padding: 10px; background: #6c757d; color: white; border: none; border-radius: 5px; margin-bottom: 10px; font-weight: bold; }
+
+        /* =========================================
+           MAGIA PARA CELULARES (Responsive)
+           ========================================= */
+        @media (max-width: 768px) {
+            /* Ocultamos el formulario de la oficina en el celular */
+            .formulario { display: none; }
+            
+            /* Mostramos el botón para ocultar la lista */
+            .btn-toggle-lista { display: block; }
+
+            /* Hacemos que la lista ocupe todo el ancho y el mapa quede abajo */
+            .contenedor-principal { flex-direction: column; }
+            .lista-entregas, .mapa-contenedor { width: 100%; min-width: 100%; }
+            
+            /* Achicamos un poco el alto del mapa en el celular */
+            #map { height: 400px; }
+        }
     </style>
 </head>
 <body>
@@ -85,26 +76,26 @@
             <div class="contador-num" id="contador-pendientes">0</div>
         </div>
         <div style="text-align: right; font-size: 13px; opacity: 0.8;">
-            (Última actualización: <span id="hora-actualizacion">--:--</span>)
+            (Última act.: <span id="hora-actualizacion">--:--</span>)
         </div>
     </div>
 
-    <!-- Formulario para agregar (Oficina) -->
+    <!-- Formulario (Se oculta en celular con CSS) -->
     <div class="formulario">
         <h3 style="margin-top: 0;">Agregar nuevo destino (Oficina)</h3>
         <input type="text" id="direccion" placeholder="Dirección (Ej: Bolivar 1334)" required>
         <input type="text" id="destinatario" placeholder="Destinatario / Cliente" required>
-        <button onclick="agregarEntrega()">Guardar Destino</button>
+        <button onclick="agregarEntrega()" style="background: #0056b3; color: white; padding: 8px 15px; border: none; border-radius: 4px; cursor: pointer;">Guardar Destino</button>
     </div>
 
-    <!-- Contenedor de Lista y Mapa -->
+    <!-- Botón para mostrar/ocultar lista (Solo celular) -->
+    <button class="btn-toggle-lista" onclick="toggleLista()" id="btn-toggle">▼ Mostrar / Ocultar Hoja de Ruta</button>
+
     <div class="contenedor-principal">
         <!-- Lista -->
-        <div class="lista-entregas">
+        <div class="lista-entregas" id="contenedor-lista-padre">
             <h3 style="margin-top: 0;">Hoja de Ruta</h3>
-            <div id="contenedor-lista">
-                <!-- Acá se cargan las tarjetas -->
-            </div>
+            <div id="contenedor-lista"></div>
         </div>
 
         <!-- Mapa -->
@@ -118,7 +109,22 @@
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
 
         let marcadores = [];
-        let entregasActuales = []; // Guardamos las entregas para saber si se agregaron nuevas
+        let entregasActuales = [];
+
+        // Función para ocultar/mostrar la lista en el celular
+        function toggleLista() {
+            const lista = document.getElementById('contenedor-lista-padre');
+            const btn = document.getElementById('btn-toggle');
+            if (lista.style.display === 'none') {
+                lista.style.display = 'block';
+                btn.innerText = '▲ Ocultar Hoja de Ruta';
+            } else {
+                lista.style.display = 'none';
+                btn.innerText = '▼ Mostrar Hoja de Ruta';
+            }
+            // Importante: al ocultar/mostrar, obligamos al mapa a recalcular su tamaño
+            setTimeout(() => { map.invalidateSize(); }, 100);
+        }
 
         const iconoEntrega = L.divIcon({
             html: '<div style="font-size: 24px; text-shadow: 1px 1px 2px black;">🛵</div>',
@@ -129,18 +135,15 @@
             const response = await fetch('/api/entregas');
             const nuevasEntregas = await response.json();
             
-            // Lógica para avisar si se agregó una nueva desde la oficina
+            // Aviso de nueva entrega
             if (entregasActuales.length > 0 && nuevasEntregas.length > entregasActuales.length) {
-                // Si la cantidad aumentó, avisamos
-                alert("🔔 ¡ATENCIÓN! La oficina acaba de agregar un nuevo destino a la hoja de ruta.");
+                alert("🔔 ¡ATENCIÓN! La oficina acaba de agregar un nuevo destino.");
             }
             entregasActuales = nuevasEntregas;
 
-            // Actualizamos el contador y la hora
             document.getElementById('contador-pendientes').innerText = nuevasEntregas.length;
             document.getElementById('hora-actualizacion').innerText = new Date().toLocaleTimeString();
 
-            // Limpiamos mapa y lista
             marcadores.forEach(m => map.removeLayer(m));
             marcadores = [];
             const contenedorLista = document.getElementById('contenedor-lista');
@@ -151,10 +154,8 @@
                 contenedorLista.innerHTML = '<p style="color: #666; text-align: center;">No hay entregas pendientes. ¡Buen trabajo!</p>';
             }
 
-            // Dibujamos todo
             nuevasEntregas.forEach(entrega => {
-                
-                // --- 1. Agregar al MAPA ---
+                // Mapa
                 if (entrega.latitud && entrega.longitud) {
                     const marker = L.marker([entrega.latitud, entrega.longitud], {icon: iconoEntrega}).addTo(map);
                     const botonesHtml = `
@@ -172,7 +173,7 @@
                     }
                 }
 
-                // --- 2. Agregar a la LISTA ---
+                // Lista
                 const tarjeta = document.createElement('div');
                 tarjeta.className = 'tarjeta-entrega';
                 tarjeta.innerHTML = `
@@ -211,9 +212,7 @@
                 document.getElementById('direccion').value = '';
                 document.getElementById('destinatario').value = '';
                 
-                if (result.encontrado === false) {
-                    alert("⚠️ Se guardó, pero no se ubicó en el mapa exacto.");
-                }
+                if (result.encontrado === false) alert("⚠️ Se guardó, pero no se ubicó en el mapa exacto.");
                 cargarEntregas(result.encontrado ? dest : null); 
             } catch (error) {
                 alert("Error al guardar.");
@@ -248,15 +247,8 @@
             });
         }
 
-        // Cargar al iniciar
         cargarEntregas();
-
-        // --- ACTUALIZACIÓN AUTOMÁTICA ---
-        // Cada 30 segundos (30000 ms), el celular del repartidor busca si hay entregas nuevas
-        setInterval(() => {
-            cargarEntregas();
-        }, 30000);
-
+        setInterval(() => { cargarEntregas(); }, 30000);
     </script>
 </body>
 </html>
