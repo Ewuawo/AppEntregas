@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>App de Entregas</title>
+    <!-- Cargamos Leaflet (Mapa) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
+        #map { height: 500px; width: 100%; border: 2px solid #ccc; margin-top: 20px; }
+        .formulario { background: #f4f4f4; padding: 15px; border-radius: 5px; max-width: 400px; }
+    </style>
+</head>
+<body>
+    <h2>Repartidor - Entregas Pendientes</h2>
+    
+    <!-- Formulario para agregar desde la oficina -->
+    <div class="formulario">
+        <h3>Agregar nueva entrega (Oficina)</h3>
+        <input type="text" id="direccion" placeholder="Dirección (Ej: Bolivar 1334)" required>
+        <input type="text" id="destinatario" placeholder="Destinatario / Cliente" required>
+        <button onclick="agregarEntrega()">Guardar Entrega</button>
+    </div>
+
+    <!-- Aquí se dibuja el mapa -->
+    <div id="map"></div>
+
+    <script>
+        // Inicializamos el mapa centrado en Corrientes Capital
+        const map = L.map('map').setView([-27.4692, -58.8306], 13);
+        
+        // Cargamos las imágenes del mapa (OpenStreetMap)
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
+
+        let marcadores = [];
+
+        // Función para cargar entregas y poner pines
+        async function cargarEntregas() {
+            const response = await fetch('/api/entregas');
+            const entregas = await response.json();
+            
+            // Limpiamos pines viejos
+            marcadores.forEach(m => map.removeLayer(m));
+            marcadores = [];
+
+            entregas.forEach(entrega => {
+                // Si la entrega ya tiene coordenadas guardadas
+                if (entrega.latitud && entrega.longitud) {
+                    const marker = L.marker([entrega.latitud, entrega.longitud]).addTo(map);
+                    marker.bindPopup(`<b>${entrega.destinatario}</b><br>${entrega.direccion}`);
+                    marcadores.push(marker);
+                } else {
+                    // Si no tiene coordenadas, mostramos un pin genérico en el centro
+                    console.log("Falta geocodificar:", entrega.direccion);
+                }
+            });
+        }
+
+        async function agregarEntrega() {
+            const dir = document.getElementById('direccion').value;
+            const dest = document.getElementById('destinatario').value;
+            
+            if (!dir || !dest) return alert("Completa ambos campos");
+
+            await fetch('/api/entregas', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ direccion: dir, destinatario: dest })
+            });
+
+            document.getElementById('direccion').value = '';
+            document.getElementById('destinatario').value = '';
+            cargarEntregas(); // Recargamos el mapa
+        }
+
+        // Cargar al iniciar
+        cargarEntregas();
+    </script>
+</body>
+</html>
