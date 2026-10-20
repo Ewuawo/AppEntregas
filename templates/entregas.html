@@ -27,48 +27,63 @@
     <!-- Aquí se dibuja el mapa -->
     <div id="map"></div>
 
-    <script>
+        <script>
         // Inicializamos el mapa centrado en Corrientes Capital
         const map = L.map('map').setView([-27.4692, -58.8306], 13);
         
-        // Cargamos las imágenes del mapa (OpenStreetMap)
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap'
         }).addTo(map);
 
         let marcadores = [];
 
-        // Función para cargar entregas y poner pines
-        async function cargarEntregas() {
+        // Creamos un ícono lindo de entregas
+        const iconoEntrega = L.divIcon({
+            html: '<div style="font-size: 24px; text-shadow: 1px 1px 2px black;">🛵</div>',
+            className: 'custom-icon',
+            iconSize: [30, 30],
+            iconAnchor: [15, 15]
+        });
+
+        async function cargarEntregas(moverMapaA = null) {
             const response = await fetch('/api/entregas');
             const entregas = await response.json();
             
-            // Limpiamos pines viejos
             marcadores.forEach(m => map.removeLayer(m));
             marcadores = [];
 
+            let bounds = L.latLngBounds(); // Para calcular el zoom
+
             entregas.forEach(entrega => {
-                // Si la entrega ya tiene coordenadas guardadas
                 if (entrega.latitud && entrega.longitud) {
-                    const marker = L.marker([entrega.latitud, entrega.longitud]).addTo(map);
-                    marker.bindPopup(`<b>${entrega.destinatario}</b><br>${entrega.direccion}`);
+                    const marker = L.marker([entrega.latitud, entrega.longitud], {icon: iconoEntrega}).addTo(map);
+                    marker.bindPopup(`<b>🛵 ${entrega.destinatario}</b><br>📍 ${entrega.direccion}`);
                     marcadores.push(marker);
-                } else {
-                    // Si no tiene coordenadas, mostramos un pin genérico en el centro
-                    console.log("Falta geocodificar:", entrega.direccion);
+                    bounds.extend([entrega.latitud, entrega.longitud]);
+
+                    // Si esta entrega es la que acabamos de guardar, centramos el mapa ahí
+                    if (moverMapaA && moverMapaA === entrega.destinatario) {
+                        map.setView([entrega.latitud, entrega.longitud], 16); // Zoom 16
+                        marker.openPopup(); // Abrimos el cartelito
+                    }
                 }
             });
+            
+            // Si no hay que centrar en ninguna, que el mapa encuadre todos los pines
+            if (!moverMapaA && marcadores.length > 0) {
+                map.fitBounds(bounds, {padding: [50, 50]});
+            }
         }
 
-                async function agregarEntrega() {
+        async function agregarEntrega() {
             const dir = document.getElementById('direccion').value;
             const dest = document.getElementById('destinatario').value;
             
             if (!dir || !dest) return alert("Completa ambos campos");
 
-            // Mostramos un mensajito de "Cargando..."
-            document.querySelector('button').innerText = "Buscando en el mapa...";
-            document.querySelector('button').disabled = true;
+            const btn = document.querySelector('button');
+            btn.innerText = "Buscando en el mapa...";
+            btn.disabled = true;
 
             try {
                 const response = await fetch('/api/entregas', {
@@ -82,22 +97,20 @@
                 document.getElementById('direccion').value = '';
                 document.getElementById('destinatario').value = '';
                 
-                // Si el backend nos avisa que no encontró coordenadas, le avisamos al usuario
                 if (result.encontrado === false) {
-                    alert("⚠️ La entrega se guardó, pero Georef no encontró la dirección exacta en el mapa. Revisá si está bien escrita.");
+                    alert("⚠️ La entrega se guardó, pero no se encontró la dirección exacta en el mapa.");
+                    cargarEntregas(); // Recarga sin mover el mapa
                 } else {
-                    alert("✅ ¡Entrega guardada y ubicada en el mapa!");
+                    // ¡Acá está la magia! Le pasamos el nombre para que vuele hacia ese pin
+                    cargarEntregas(dest); 
                 }
-                
-                cargarEntregas(); // Recargamos el mapa
                 
             } catch (error) {
                 alert("Hubo un error al guardar.");
                 console.error(error);
             } finally {
-                // Restauramos el botón
-                document.querySelector('button').innerText = "Guardar Entrega";
-                document.querySelector('button').disabled = false;
+                btn.innerText = "Guardar Entrega";
+                btn.disabled = false;
             }
         }
 
