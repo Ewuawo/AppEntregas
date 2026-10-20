@@ -38,31 +38,46 @@ init_db()
 import requests
 
 def obtener_coordenadas(direccion):
-    # Endpoint oficial de Georef para direcciones
+    # Endpoint de Georef
     url = "https://apis.datos.gob.ar/georef/api/direcciones"
     
-    # Le pasamos la dirección y le decimos que busque en Corrientes para mayor precisión
-    params = {
+    # Intento 1: Buscar la dirección exacta en Corrientes
+    params_exacto = {
         "direccion": direccion,
         "provincia": "Corrientes",
-        "max": 1  # Solo queremos el resultado más probable
+        "max": 1
     }
     
     try:
-        response = requests.get(url, params=params, timeout=5)
-        response.raise_for_status() # Lanza error si hay problema (ej. 500)
+        response = requests.get(url, params=params_exacto, timeout=5)
         data = response.json()
         
-        # Georef devuelve una lista de 'direcciones'
+        # Si encuentra algo...
         if data.get("direcciones") and len(data["direcciones"]) > 0:
             ubicacion = data["direcciones"][0].get("ubicacion")
             if ubicacion:
-                # Georef devuelve lat y lon como strings o floats, los aseguramos
                 return float(ubicacion["lat"]), float(ubicacion["lon"])
                 
+        # Intento 2: Si falló, intentamos buscar solo la calle (por si la altura no existe)
+        # Ej: Si "Bolivar 1334" falla, buscamos "Bolivar"
+        calle = direccion.split()[0] # Agarramos la primera palabra
+        params_calle = {
+            "direccion": calle,
+            "provincia": "Corrientes",
+            "max": 1
+        }
+        response_calle = requests.get(url, params=params_calle, timeout=5)
+        data_calle = response_calle.json()
+        
+        if data_calle.get("direcciones") and len(data_calle["direcciones"]) > 0:
+            ubicacion_calle = data_calle["direcciones"][0].get("ubicacion")
+            if ubicacion_calle:
+                return float(ubicacion_calle["lat"]), float(ubicacion_calle["lon"])
+
     except Exception as e:
         print(f"Error consultando Georef para '{direccion}':", e)
     
+    # Si no encontró nada de nada
     return None, None
 
 @app.route("/")

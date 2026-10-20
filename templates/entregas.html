@@ -60,21 +60,45 @@
             });
         }
 
-        async function agregarEntrega() {
+                async function agregarEntrega() {
             const dir = document.getElementById('direccion').value;
             const dest = document.getElementById('destinatario').value;
             
             if (!dir || !dest) return alert("Completa ambos campos");
 
-            await fetch('/api/entregas', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ direccion: dir, destinatario: dest })
-            });
+            // Mostramos un mensajito de "Cargando..."
+            document.querySelector('button').innerText = "Buscando en el mapa...";
+            document.querySelector('button').disabled = true;
 
-            document.getElementById('direccion').value = '';
-            document.getElementById('destinatario').value = '';
-            cargarEntregas(); // Recargamos el mapa
+            try {
+                const response = await fetch('/api/entregas', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ direccion: dir, destinatario: dest })
+                });
+                
+                const result = await response.json();
+
+                document.getElementById('direccion').value = '';
+                document.getElementById('destinatario').value = '';
+                
+                // Si el backend nos avisa que no encontró coordenadas, le avisamos al usuario
+                if (result.encontrado === false) {
+                    alert("⚠️ La entrega se guardó, pero Georef no encontró la dirección exacta en el mapa. Revisá si está bien escrita.");
+                } else {
+                    alert("✅ ¡Entrega guardada y ubicada en el mapa!");
+                }
+                
+                cargarEntregas(); // Recargamos el mapa
+                
+            } catch (error) {
+                alert("Hubo un error al guardar.");
+                console.error(error);
+            } finally {
+                // Restauramos el botón
+                document.querySelector('button').innerText = "Guardar Entrega";
+                document.querySelector('button').disabled = false;
+            }
         }
 
         // Cargar al iniciar
