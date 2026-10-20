@@ -84,7 +84,8 @@ def index():
 @app.route("/api/entregas", methods=["GET"])
 def listar_entregas():
     conn = get_db_connection()
-    entregas = conn.execute('SELECT * FROM entregas WHERE estado = "pendiente"').fetchall()
+    # Traemos todas las pendientes, ordenadas por ID
+    entregas = conn.execute('SELECT * FROM entregas WHERE estado = "pendiente" ORDER BY id ASC').fetchall()
     conn.close()
     return jsonify([dict(ix) for ix in entregas])
 
