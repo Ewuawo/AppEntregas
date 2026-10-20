@@ -1,10 +1,7 @@
 from flask import Flask, render_template, request, jsonify
 import sqlite3
 import os
-import urllib.request
-import urllib.parse
-import json
-import time
+import requests
 
 app = Flask(__name__)
 DB_FILE = os.path.join(app.root_path, "entregas.db")
@@ -34,9 +31,7 @@ def init_db():
 
 init_db()
 
-# --- FUNCIÓN NUEVA: Geocodificación ---
-import requests
-
+# --- FUNCIÓN: Geocodificación con Georef ---
 def obtener_coordenadas(direccion):
     url = "https://apis.datos.gob.ar/georef/api/direcciones"
     
@@ -44,7 +39,7 @@ def obtener_coordenadas(direccion):
     params_exacto = {
         "direccion": direccion,
         "provincia": "Corrientes",
-        "localidad": "Corrientes", # <-- Esto es la clave
+        "localidad": "Corrientes",
         "max": 1
     }
     
@@ -56,8 +51,6 @@ def obtener_coordenadas(direccion):
             ubicacion = data["direcciones"][0].get("ubicacion")
             if ubicacion:
                 lat, lon = float(ubicacion["lat"]), float(ubicacion["lon"])
-                # Corrientes Capital está aprox entre lat -27.3 a -27.6 y lon -58.7 a -58.9
-                # Verificamos que no se haya ido a otra provincia o localidad lejana
                 if -27.7 < lat < -27.3 and -59.0 < lon < -58.6:
                     return lat, lon
                 
@@ -112,6 +105,9 @@ def agregar_entrega():
     conn.commit()
     nuevo_id = cursor.lastrowid
     conn.close()
+    
+    # Le avisamos al HTML si encontró o no la dirección
+    return jsonify({"mensaje": "Entrega agregada", "id": nuevo_id, "encontrado": lat is not None}), 201
 
 @app.route("/api/entregas/<int:id>/completar", methods=["PUT"])
 def completar_entrega(id):
@@ -120,11 +116,6 @@ def completar_entrega(id):
     conn.commit()
     conn.close()
     return jsonify({"mensaje": "Entrega completada"}), 200
-    
-    # Pequeña pausa para no saturar el servidor de mapas gratuito
-    
-    
-    return jsonify({"mensaje": "Entrega agregada", "id": nuevo_id}), 201
 
 if __name__ == "__main__":
     app.run(debug=True)

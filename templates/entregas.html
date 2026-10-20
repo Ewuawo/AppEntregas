@@ -4,9 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>App de Entregas</title>
+    
     <!-- Cargamos Leaflet (Mapa) -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Cargamos el motor de rutas (OSRM) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.css" />
+    <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script>
+    
     <style>
         body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
         #map { height: 500px; width: 100%; border: 2px solid #ccc; margin-top: 20px; }
@@ -27,7 +33,7 @@
     <!-- Aquí se dibuja el mapa -->
     <div id="map"></div>
 
-        <script>
+    <script>
         // Inicializamos el mapa centrado en Corrientes Capital
         const map = L.map('map').setView([-27.4692, -58.8306], 13);
         
@@ -37,7 +43,7 @@
 
         let marcadores = [];
 
-        // Creamos un ícono lindo de entregas
+        // Creamos un ícono lindo de entregas (la motito)
         const iconoEntrega = L.divIcon({
             html: '<div style="font-size: 24px; text-shadow: 1px 1px 2px black;">🛵</div>',
             className: 'custom-icon',
@@ -54,24 +60,34 @@
 
             let bounds = L.latLngBounds(); // Para calcular el zoom
 
-        entregas.forEach(entrega => {
-    if (entrega.latitud && entrega.longitud) {
-        const marker = L.marker([entrega.latitud, entrega.longitud], {icon: iconoEntrega}).addTo(map);
-        
-        // Creamos el botón de completar dentro del popup
-        const botonHtml = `
-            <div style="text-align: center; margin-top: 10px;">
-                <button onclick="completarEntrega(${entrega.id})" style="background-color: #28a745; color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; font-weight: bold;">
-                    ✅ Marcar como Entregado
-                </button>
-            </div>
-        `;
-        
-        marker.bindPopup(`<b>🛵 ${entrega.destinatario}</b><br>📍 ${entrega.direccion}${botonHtml}`);
-        marcadores.push(marker);
-        bounds.extend([entrega.latitud, entrega.longitud]);
-    }
-});
+            entregas.forEach(entrega => {
+                if (entrega.latitud && entrega.longitud) {
+                    const marker = L.marker([entrega.latitud, entrega.longitud], {icon: iconoEntrega}).addTo(map);
+                    
+                    // --- ACÁ ESTÁ LA MAGIA: Los dos botones dentro del mismo Popup ---
+                    const botonesHtml = `
+                        <div style="text-align: center; margin-top: 10px; display: flex; flex-direction: column; gap: 5px;">
+                            <button onclick="completarEntrega(${entrega.id})" style="background-color: #28a745; color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%;">
+                                ✅ Marcar como Entregado
+                            </button>
+                            <button onclick="trazarRuta(${entrega.latitud}, ${entrega.longitud})" style="background-color: #007bff; color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%;">
+                                📍 Ir a esta dirección
+                            </button>
+                        </div>
+                    `;
+                    
+                    marker.bindPopup(`<b>🛵 ${entrega.destinatario}</b><br>📍 ${entrega.direccion}${botonesHtml}`);
+                    marcadores.push(marker);
+                    
+                    bounds.extend([entrega.latitud, entrega.longitud]);
+
+                    // Si esta entrega es la que acabamos de guardar, centramos el mapa ahí
+                    if (moverMapaA && moverMapaA === entrega.destinatario) {
+                        map.setView([entrega.latitud, entrega.longitud], 16); 
+                        marker.openPopup(); 
+                    }
+                }
+            });
             
             // Si no hay que centrar en ninguna, que el mapa encuadre todos los pines
             if (!moverMapaA && marcadores.length > 0) {
@@ -103,9 +119,8 @@
                 
                 if (result.encontrado === false) {
                     alert("⚠️ La entrega se guardó, pero no se encontró la dirección exacta en el mapa.");
-                    cargarEntregas(); // Recarga sin mover el mapa
+                    cargarEntregas(); 
                 } else {
-                    // ¡Acá está la magia! Le pasamos el nombre para que vuele hacia ese pin
                     cargarEntregas(dest); 
                 }
                 
@@ -117,12 +132,42 @@
                 btn.disabled = false;
             }
         }
+
         async function completarEntrega(id) {
-    if(confirm("¿Confirmás que esta entrega ya fue realizada?")) {
-        await fetch(`/api/entregas/${id}/completar`, { method: 'PUT' });
-        cargarEntregas(); // Recarga el mapa y hace desaparecer la motito porque ya no está "pendiente"
-    }
-}
+            if(confirm("¿Confirmás que esta entrega ya fue realizada?")) {
+                await fetch(`/api/entregas/${id}/completar`, { method: 'PUT' });
+                cargarEntregas(); 
+            }
+        }
+
+        function trazarRuta(lat, lon) {
+            // 1. Pedimos la ubicación del celular del repartidor
+            navigator.geolocation.getCurrentPosition((position) => {
+                const latRepartidor = position.coords.latitude;
+                const lonRepartidor = position.coords.longitude;
+
+                // 2. Borramos cualquier ruta anterior
+                if (window.rutaActual) { map.removeControl(window.rutaActual); }
+
+                // 3. Dibujamos la ruta con OSRM
+                window.rutaActual = L.Routing.control({
+                    waypoints: [
+                        L.latLng(latRepartidor, lonRepartidor), // Punto A (Repartidor)
+                        L.latLng(lat, lon)                      // Punto B (Destino)
+                    ],
+                    language: 'es',
+                    show: false, 
+                    lineOptions: {
+                        styles: [{color: 'blue', weight: 5}] 
+                    },
+                    createMarker: function() { return null; } 
+                }).addTo(map);
+                
+            }, () => {
+                alert("Por favor, activá el GPS en tu celular para trazar la ruta.");
+            });
+        }
+
         // Cargar al iniciar
         cargarEntregas();
     </script>
