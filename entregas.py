@@ -35,21 +35,33 @@ def init_db():
 init_db()
 
 # --- FUNCIÓN NUEVA: Geocodificación ---
+import requests
+
 def obtener_coordenadas(direccion):
-    # Le agregamos "Corrientes, Argentina" para que busque en nuestra ciudad
-    busqueda = f"{direccion}, Corrientes, Argentina"
-    url = "https://nominatim.openstreetmap.org/search?q=" + urllib.parse.quote(busqueda) + "&format=json&limit=1"
+    # Endpoint oficial de Georef para direcciones
+    url = "https://apis.datos.gob.ar/georef/api/direcciones"
     
-    # Nominatim exige que le digamos quiénes somos, si no, bloquea la petición
-    req = urllib.request.Request(url, headers={'User-Agent': 'AppEntregasOficina/1.0'})
+    # Le pasamos la dirección y le decimos que busque en Corrientes para mayor precisión
+    params = {
+        "direccion": direccion,
+        "provincia": "Corrientes",
+        "max": 1  # Solo queremos el resultado más probable
+    }
     
     try:
-        with urllib.request.urlopen(req) as response:
-            data = json.loads(response.read().decode())
-            if data:
-                return float(data[0]['lat']), float(data[0]['lon'])
+        response = requests.get(url, params=params, timeout=5)
+        response.raise_for_status() # Lanza error si hay problema (ej. 500)
+        data = response.json()
+        
+        # Georef devuelve una lista de 'direcciones'
+        if data.get("direcciones") and len(data["direcciones"]) > 0:
+            ubicacion = data["direcciones"][0].get("ubicacion")
+            if ubicacion:
+                # Georef devuelve lat y lon como strings o floats, los aseguramos
+                return float(ubicacion["lat"]), float(ubicacion["lon"])
+                
     except Exception as e:
-        print("Error buscando coordenadas:", e)
+        print(f"Error consultando Georef para '{direccion}':", e)
     
     return None, None
 
@@ -83,7 +95,7 @@ def agregar_entrega():
     conn.close()
     
     # Pequeña pausa para no saturar el servidor de mapas gratuito
-    time.sleep(1) 
+    
     
     return jsonify({"mensaje": "Entrega agregada", "id": nuevo_id}), 201
 
