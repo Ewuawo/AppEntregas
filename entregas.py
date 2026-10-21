@@ -1,24 +1,31 @@
-from flask import Flask, render_template, request, jsonify
-import sqlite3
 import os
 import requests
+from flask import Flask, render_template, request, jsonify
+import psycopg2
+from psycopg2.extras import RealDictCursor
 
 app = Flask(__name__)
-DB_FILE = os.path.join(app.root_path, "entregas.db")
+
+# Leemos la URL de conexión desde una variable de entorno
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
 def get_db_connection():
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row
-    conn.execute('PRAGMA journal_mode = WAL;')
-    conn.execute('PRAGMA synchronous = NORMAL;')
-    conn.execute('PRAGMA busy_timeout = 5000;')
+    # Render a veces da la URL con "postgres://", pero psycopg2 espera "postgresql://"
+    if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
+        db_url = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+    else:
+        db_url = DATABASE_URL
+        
+    # Aiven requiere SSL, y psycopg2 lo maneja si la URL tiene sslmode=require
+    conn = psycopg2.connect(db_url, cursor_factory=RealDictCursor)
     return conn
 
 def init_db():
     conn = get_db_connection()
-    conn.execute('''
+    cursor = conn.cursor()
+    cursor.execute('''
         CREATE TABLE IF NOT EXISTS entregas (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             direccion TEXT NOT NULL,
             destinatario TEXT,
             estado TEXT DEFAULT 'pendiente',
@@ -27,9 +34,14 @@ def init_db():
         )
     ''')
     conn.commit()
+    cursor.close()
     conn.close()
 
-init_db()
+# Llamamos a init_db() solo si la URL existe
+if DATABASE_URL:
+    init_db()
+
+# ... (El resto de tu código: obtener_coordenadas, listar_entregas, agregar_entrega, completar_entrega, etc. queda IGUAL, pero usando get_db_connection() y cursores de psycopg2)
 
 # --- FUNCIÓN: Geocodificación con Georef ---
 def obtener_coordenadas(direccion):
@@ -84,10 +96,12 @@ def index():
 @app.route("/api/entregas", methods=["GET"])
 def listar_entregas():
     conn = get_db_connection()
-    # Traemos todas las pendientes, ordenadas por ID
-    entregas = conn.execute('SELECT * FROM entregas WHERE estado = "pendiente" ORDER BY id ASC').fetchall()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM entregas WHERE estado = %s ORDER BY id ASC', ('pendiente',))
+    entregas = cursor.fetchall()
+    cursor.close()
     conn.close()
-    return jsonify([dict(ix) for ix in entregas])
+    return jsonify(entregas)
 
 @app.route("/api/entregas", methods=["POST"])
 def agregar_entrega():
