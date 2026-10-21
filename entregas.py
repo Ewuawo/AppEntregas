@@ -6,23 +6,25 @@ from psycopg2.extras import RealDictCursor
 
 app = Flask(__name__)
 
-# Leemos la URL de conexión desde una variable de entorno
+# Leemos la URL de conexión desde la variable de entorno
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
 def get_db_connection():
-    # Render a veces da la URL con "postgres://", pero psycopg2 espera "postgresql://"
-    if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
-        db_url = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-    else:
-        db_url = DATABASE_URL
+    if not DATABASE_URL:
+        raise ValueError("Falta la variable DATABASE_URL en Render")
         
-    # Aiven requiere SSL, y psycopg2 lo maneja si la URL tiene sslmode=require
+    db_url = DATABASE_URL
+    # psycopg2 necesita "postgresql://", no "postgres://"
+    if db_url.startswith("postgres://"):
+        db_url = db_url.replace("postgres://", "postgresql://", 1)
+        
     conn = psycopg2.connect(db_url, cursor_factory=RealDictCursor)
     return conn
 
 def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
+    # En PostgreSQL el ID autoincremental es SERIAL
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS entregas (
             id SERIAL PRIMARY KEY,
@@ -37,11 +39,9 @@ def init_db():
     cursor.close()
     conn.close()
 
-# Llamamos a init_db() solo si la URL existe
+# Inicializamos la tabla
 if DATABASE_URL:
     init_db()
-
-# ... (El resto de tu código: obtener_coordenadas, listar_entregas, agregar_entrega, completar_entrega, etc. queda IGUAL, pero usando get_db_connection() y cursores de psycopg2)
 
 # --- FUNCIÓN: Geocodificación con Georef ---
 def obtener_coordenadas(direccion):
@@ -95,42 +95,59 @@ def index():
 
 @app.route("/api/entregas", methods=["GET"])
 def listar_entregas():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('SELECT * FROM entregas WHERE estado = %s ORDER BY id ASC', ('pendiente',))
-    entregas = cursor.fetchall()
-    cursor.close()
-    conn.close()
-    return jsonify(entregas)
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        # En Postgres los parámetros se pasan con %s
+        cursor.execute("SELECT * FROM entregas WHERE estado = %s ORDER BY id ASC", ('pendiente',))
+        entregas = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return jsonify(entregas)
+    except Exception as e:
+        print("Error al listar:", e)
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/entregas", methods=["POST"])
 def agregar_entrega():
     data = request.json
     direccion = data.get("direccion")
     
-    # Buscamos las coordenadas antes de guardar
     lat, lon = obtener_coordenadas(direccion)
     
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('''
-        INSERT INTO entregas (direccion, destinatario, latitud, longitud) 
-        VALUES (?, ?, ?, ?)
-    ''', (direccion, data.get("destinatario"), lat, lon))
-    conn.commit()
-    nuevo_id = cursor.lastrowid
-    conn.close()
-    
-    # Le avisamos al HTML si encontró o no la dirección
-    return jsonify({"mensaje": "Entrega agregada", "id": nuevo_id, "encontrado": lat is not None}), 201
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        # En Postgres es %s en vez de ? y usamos RETURNING id para obtener el ID nuevo
+        cursor.execute('''
+            INSERT INTO entregas (direccion, destinatario, latitud, longitud) 
+            VALUES (%s, %s, %s, %s) RETURNING id
+        ''', (direccion, data.get("destinatario"), lat, lon))
+        
+        nuevo_id = cursor.fetchone()['id']
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        return jsonify({"mensaje": "Entrega agregada", "id": nuevo_id, "encontrado": lat is not None}), 201
+    except Exception as e:
+        print("Error al guardar:", e)
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/entregas/<int:id>/completar", methods=["PUT"])
 def completar_entrega(id):
-    conn = get_db_connection()
-    conn.execute('UPDATE entregas SET estado = "entregado" WHERE id = ?', (id,))
-    conn.commit()
-    conn.close()
-    return jsonify({"mensaje": "Entrega completada"}), 200
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        # En Postgres usamos %s para el ID
+        cursor.execute("UPDATE entregas SET estado = 'entregado' WHERE id = %s", (id,))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"mensaje": "Entrega completada"}), 200
+    except Exception as e:
+        print("Error al completar:", e)
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(debug=True)
