@@ -46,7 +46,7 @@ if DATABASE_URL:
     init_db()
 
 # 3. LÓGICA DE LOGIN
-CLAVE_SECRETA_APP = "CorrientesEntregas2026" 
+CLAVE_SECRETA_APP = "Matute6288" 
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
