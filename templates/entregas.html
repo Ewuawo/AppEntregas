@@ -43,11 +43,9 @@
         .info-entrega h4 { margin: 0 0 5px 0; color: #333; font-size: 18px; }
         .info-entrega p { margin: 0; font-size: 14px; color: #666; }
         
-        .botones-accion button { display: block; width: 100%; margin-top: 5px; padding: 5px 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; }
+        .botones-accion button, .botones-accion a { display: block; width: 100%; margin-top: 5px; padding: 5px 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; }
         .btn-entregado { background-color: #28a745; color: white; }
         .btn-ruta { background-color: #007bff; color: white; }
-
-        .btn-toggle-lista { display: none; width: 100%; padding: 10px; background: #6c757d; color: white; border: none; border-radius: 5px; margin-bottom: 10px; font-weight: bold; }
 
         /* =========================================
            MAGIA PARA CELULARES (Responsive + Modo Oscuro)
@@ -66,12 +64,11 @@
 
             /* --- LAYOUT --- */
             .formulario { display: none; }
-            .btn-toggle-lista { display: block; background: #333; color: white; }
             .contenedor-principal { flex-direction: column; }
-            .lista-entregas, .mapa-contenedor { width: 100%; min-width: 100%; }
+            .lista-entregas { width: 100%; min-width: 100%; }
             
-            /* Achicamos el alto del mapa */
-            #map { height: 400px; }
+            /* Ocultamos el mapa por completo */
+            .mapa-contenedor { display: none !important; }
         }
     </style>
 </head>
@@ -96,9 +93,6 @@
         <button onclick="agregarEntrega()" style="background: #0056b3; color: white; padding: 8px 15px; border: none; border-radius: 4px; cursor: pointer;">Guardar Destino</button>
     </div>
 
-    <!-- Botón para mostrar/ocultar lista (Solo celular) -->
-    <button class="btn-toggle-lista" onclick="toggleLista()" id="btn-toggle">▼ Mostrar Mapa y Ruta</button>
-
     <div class="contenedor-principal">
         <!-- Lista -->
         <div class="lista-entregas" id="contenedor-lista-padre">
@@ -106,53 +100,29 @@
             <div id="contenedor-lista"></div>
         </div>
 
-        <!-- Mapa: Le pusimos 'display: none' para que arranque oculto -->
-        <div class="mapa-contenedor" id="mapa-padre" style="display: none;">
+        <!-- Mapa (Solo se verá en la PC) -->
+        <div class="mapa-contenedor" id="mapa-padre">
             <div id="map"></div>
         </div>
     </div>
 
     <script>
-        // Detección de celular para arrancar con el mapa oculto/visible
+        // 1. Detectar si es celular
         const esCelular = window.innerWidth <= 768;
-        
+
+        // 2. Solo inicializamos el mapa si NO es celular
+        let map = null;
         if (!esCelular) {
-            // Si es PC, forzamos a que el mapa se vea
-            document.getElementById('mapa-padre').style.display = 'block';
+            map = L.map('map').setView([-27.4692, -58.8306], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
+        } else {
+            // Si es celular, destruimos el contenedor del mapa para que no ocupe lugar en el HTML
+            const mapaPadre = document.getElementById('mapa-padre');
+            if (mapaPadre) mapaPadre.remove(); 
         }
-
-        // Inicializamos el mapa con el estilo oscuro si es celular
-        const map = L.map('map').setView([-27.4692, -58.8306], 13);
-        
-        // Si es celular, usamos un mapa oscuro (CartoDB Dark Matter), si es PC el clásico
-        const urlMapa = esCelular 
-            ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-            : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-
-        L.tileLayer(urlMapa, { 
-            attribution: '© OpenStreetMap / CartoDB' 
-        }).addTo(map);
 
         let marcadores = [];
         let entregasActuales = [];
-
-        // Función para ocultar/mostrar la lista y el mapa en el celular
-        function toggleLista() {
-            const lista = document.getElementById('contenedor-lista-padre');
-            const mapa = document.getElementById('mapa-padre');
-            const btn = document.getElementById('btn-toggle');
-
-            if (lista.style.display === 'none') {
-                lista.style.display = 'block';
-                mapa.style.display = 'block';
-                btn.innerText = '▲ Ocultar Mapa y Ruta';
-            } else {
-                lista.style.display = 'none';
-                mapa.style.display = 'none';
-                btn.innerText = '▼ Mostrar Mapa y Ruta';
-            }
-            setTimeout(() => { map.invalidateSize(); }, 100);
-        }
 
         const iconoEntrega = L.divIcon({
             html: '<img src="/static/damgata.jpeg" style="width: 100%; height: 100%; object-fit: contain;">',
@@ -173,8 +143,12 @@
             document.getElementById('contador-pendientes').innerText = nuevasEntregas.length;
             document.getElementById('hora-actualizacion').innerText = new Date().toLocaleTimeString();
 
-            marcadores.forEach(m => map.removeLayer(m));
-            marcadores = [];
+            // Solo limpiamos marcadores si el mapa existe (o sea, si estamos en la PC)
+            if (map) {
+                marcadores.forEach(m => map.removeLayer(m));
+                marcadores = [];
+            }
+            
             const contenedorLista = document.getElementById('contenedor-lista');
             contenedorLista.innerHTML = '';
             let bounds = L.latLngBounds();
@@ -184,12 +158,12 @@
             }
 
             nuevasEntregas.forEach(entrega => {
-                if (entrega.latitud && entrega.longitud) {
+                // Solo dibujamos en el mapa si estamos en la PC
+                if (!esCelular && entrega.latitud && entrega.longitud) {
                     const marker = L.marker([entrega.latitud, entrega.longitud], {icon: iconoEntrega}).addTo(map);
                     const botonesHtml = `
                         <div style="text-align: center; margin-top: 10px; display: flex; flex-direction: column; gap: 5px;">
                             <button onclick="completarEntrega(${entrega.id})" style="background-color: #28a745; color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; font-weight: bold;">✅ Entregado</button>
-                            <button onclick="trazarRuta(${entrega.latitud}, ${entrega.longitud})" style="background-color: #007bff; color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; font-weight: bold;">📍 Ir</button>
                         </div>`;
                     marker.bindPopup(`<b>🛵 ${entrega.destinatario}</b><br>📍 ${entrega.direccion}${botonesHtml}`);
                     marcadores.push(marker);
@@ -201,22 +175,34 @@
                     }
                 }
 
+                // Creamos la tarjeta para la lista
                 const tarjeta = document.createElement('div');
                 tarjeta.className = 'tarjeta-entrega';
+                
+                // Lógica del botón "Ir": En PC traza ruta, en celular abre Google Maps
+                let botonIrHTML = '';
+                if (esCelular) {
+                    // Abre la app de mapas nativa del celular
+                    botonIrHTML = `<a href="https://www.google.com/maps/dir/?api=1&destination=${entrega.latitud},${entrega.longitud}" target="_blank" class="btn-ruta" style="text-decoration:none; text-align:center;">📍 Ir</a>`;
+                } else {
+                    // En PC usa Leaflet Routing
+                    botonIrHTML = `<button class="btn-ruta" onclick="trazarRuta(${entrega.latitud}, ${entrega.longitud})">📍 Ir</button>`;
+                }
+
                 tarjeta.innerHTML = `
                     <div class="info-entrega">
                         <h4>${entrega.direccion}</h4>
                         <p>👤 ${entrega.destinatario}</p>
                     </div>
                     <div class="botones-accion">
-                        <button class="btn-ruta" onclick="trazarRuta(${entrega.latitud}, ${entrega.longitud})">📍 Ir</button>
+                        ${botonIrHTML}
                         <button class="btn-entregado" onclick="completarEntrega(${entrega.id})">✅ Listo</button>
                     </div>
                 `;
                 contenedorLista.appendChild(tarjeta);
             });
             
-            if (!moverMapaA && marcadores.length > 0) {
+            if (map && !moverMapaA && marcadores.length > 0) {
                 map.fitBounds(bounds, {padding: [50, 50]});
             }
         }
@@ -255,8 +241,9 @@
             }
         }
 
+        // TrazarRuta solo se usa en la PC
         function trazarRuta(lat, lon) {
-            if (!lat || !lon) return alert("Esta dirección no tiene coordenadas exactas en el mapa.");
+            if (!lat || !lon || !map) return;
             
             navigator.geolocation.getCurrentPosition((position) => {
                 const latRepartidor = position.coords.latitude;
@@ -266,7 +253,7 @@
                 window.rutaActual = L.Routing.control({
                     waypoints: [ L.latLng(latRepartidor, lonRepartidor), L.latLng(lat, lon) ],
                     language: 'es', show: false,
-                    lineOptions: { styles: [{color: '#00b0ff', weight: 5}] }, // Línea celeste brillante
+                    lineOptions: { styles: [{color: '#007bff', weight: 5}] },
                     createMarker: function() { return null; }
                 }).addTo(map);
             }, () => {
