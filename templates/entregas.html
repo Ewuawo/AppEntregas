@@ -38,8 +38,10 @@
             border-bottom: 1px solid #eee; padding: 10px 0; display: flex; justify-content: space-between; align-items: center;
         }
         .tarjeta-entrega:last-child { border-bottom: none; }
-        .info-entrega h4 { margin: 0 0 5px 0; color: #333; }
-        .info-entrega p { margin: 0; font-size: 13px; color: #666; }
+        
+        /* Modificado: Dirección más grande (H4) y Nombre más chico (P) */
+        .info-entrega h4 { margin: 0 0 5px 0; color: #333; font-size: 18px; } 
+        .info-entrega p { margin: 0; font-size: 14px; color: #666; }
         
         .botones-accion button { display: block; width: 100%; margin-top: 5px; padding: 5px 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; }
         .btn-entregado { background-color: #28a745; color: white; }
@@ -61,6 +63,9 @@
             /* Hacemos que la lista ocupe todo el ancho y el mapa quede abajo */
             .contenedor-principal { flex-direction: column; }
             .lista-entregas, .mapa-contenedor { width: 100%; min-width: 100%; }
+            
+            /* Ocultamos el mapa por defecto en el celular */
+            .mapa-contenedor { display: none; }
             
             /* Achicamos un poco el alto del mapa en el celular */
             #map { height: 400px; }
@@ -89,7 +94,7 @@
     </div>
 
     <!-- Botón para mostrar/ocultar lista (Solo celular) -->
-    <button class="btn-toggle-lista" onclick="toggleLista()" id="btn-toggle">▼ Mostrar / Ocultar Hoja de Ruta</button>
+    <button class="btn-toggle-lista" onclick="toggleLista()" id="btn-toggle">▼ Mostrar Mapa y Ruta</button>
 
     <div class="contenedor-principal">
         <!-- Lista -->
@@ -99,7 +104,7 @@
         </div>
 
         <!-- Mapa -->
-        <div class="mapa-contenedor">
+        <div class="mapa-contenedor" id="mapa-padre">
             <div id="map"></div>
         </div>
     </div>
@@ -111,23 +116,26 @@
         let marcadores = [];
         let entregasActuales = [];
 
-        // Función para ocultar/mostrar la lista en el celular
+        // Función para ocultar/mostrar la lista y el mapa en el celular
         function toggleLista() {
             const lista = document.getElementById('contenedor-lista-padre');
+            const mapa = document.getElementById('mapa-padre');
             const btn = document.getElementById('btn-toggle');
+
             if (lista.style.display === 'none') {
                 lista.style.display = 'block';
-                btn.innerText = '▲ Ocultar Hoja de Ruta';
+                mapa.style.display = 'block';
+                btn.innerText = '▲ Ocultar Mapa y Ruta';
             } else {
                 lista.style.display = 'none';
-                btn.innerText = '▼ Mostrar Hoja de Ruta';
+                mapa.style.display = 'none';
+                btn.innerText = '▼ Mostrar Mapa y Ruta';
             }
-            // Importante: al ocultar/mostrar, obligamos al mapa a recalcular su tamaño
+            // Obligamos al mapa a recalcular su tamaño
             setTimeout(() => { map.invalidateSize(); }, 100);
         }
 
-                const iconoEntrega = L.divIcon({
-            // Flask por defecto sirve los archivos de la carpeta "static"
+        const iconoEntrega = L.divIcon({
             html: '<img src="/static/damgata.jpeg" style="width: 100%; height: 100%; object-fit: contain;">',
             className: 'custom-icon', 
             iconSize: [40, 40], 
@@ -176,13 +184,13 @@
                     }
                 }
 
-                // Lista
+                // Lista - MODIFICADO: Dirección grande, nombre abajo
                 const tarjeta = document.createElement('div');
                 tarjeta.className = 'tarjeta-entrega';
                 tarjeta.innerHTML = `
                     <div class="info-entrega">
-                        <h4>${entrega.destinatario}</h4>
-                        <p>📍 ${entrega.direccion}</p>
+                        <h4>${entrega.direccion}</h4>
+                        <p>👤 ${entrega.destinatario}</p>
                     </div>
                     <div class="botones-accion">
                         <button class="btn-ruta" onclick="trazarRuta(${entrega.latitud}, ${entrega.longitud})">📍 Ir</button>
