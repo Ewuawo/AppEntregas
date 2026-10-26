@@ -11,7 +11,10 @@
     <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script>
     
     <style>
-        body { font-family: Arial, sans-serif; margin: 0; padding: 10px; background-color: #f8f9fa; }
+        /* =========================================
+           ESTILOS BASE (PC)
+           ========================================= */
+        body { font-family: Arial, sans-serif; margin: 0; padding: 10px; background-color: #f8f9fa; transition: background 0.3s; }
         
         .panel-contadores { 
             background: #0056b3; color: white; padding: 15px; border-radius: 8px; 
@@ -20,7 +23,6 @@
         }
         .contador-num { font-size: 24px; font-weight: bold; }
 
-        /* Formulario: Por defecto se ve (PC) */
         .formulario { background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         .formulario input { padding: 8px; margin-right: 5px; margin-bottom: 5px; border: 1px solid #ccc; border-radius: 4px; }
         
@@ -28,46 +30,47 @@
         
         .lista-entregas {
             flex: 1; min-width: 300px; background: white; border-radius: 8px; padding: 10px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1); max-height: 500px; overflow-y: auto;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); max-height: 500px; overflow-y: auto; transition: background 0.3s;
         }
         
         .mapa-contenedor { flex: 2; min-width: 300px; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        #map { height: 500px; width: 100%; }
+        #map { height: 500px; width: 100%; background-color: #ddd; }
 
         .tarjeta-entrega {
             border-bottom: 1px solid #eee; padding: 10px 0; display: flex; justify-content: space-between; align-items: center;
         }
         .tarjeta-entrega:last-child { border-bottom: none; }
-        
-        /* Modificado: Dirección más grande (H4) y Nombre más chico (P) */
-        .info-entrega h4 { margin: 0 0 5px 0; color: #333; font-size: 18px; } 
+        .info-entrega h4 { margin: 0 0 5px 0; color: #333; font-size: 18px; }
         .info-entrega p { margin: 0; font-size: 14px; color: #666; }
         
         .botones-accion button { display: block; width: 100%; margin-top: 5px; padding: 5px 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; }
         .btn-entregado { background-color: #28a745; color: white; }
         .btn-ruta { background-color: #007bff; color: white; }
 
-        /* Botón para ocultar lista (solo visible en celular) */
         .btn-toggle-lista { display: none; width: 100%; padding: 10px; background: #6c757d; color: white; border: none; border-radius: 5px; margin-bottom: 10px; font-weight: bold; }
 
         /* =========================================
-           MAGIA PARA CELULARES (Responsive)
+           MAGIA PARA CELULARES (Responsive + Modo Oscuro)
            ========================================= */
         @media (max-width: 768px) {
-            /* Ocultamos el formulario de la oficina en el celular */
-            .formulario { display: none; }
+            /* --- MODO OSCURO GENERAL --- */
+            body { background-color: #121212; color: #e0e0e0; }
             
-            /* Mostramos el botón para ocultar la lista */
-            .btn-toggle-lista { display: block; }
+            .lista-entregas { background-color: #1e1e1e; color: #e0e0e0; }
+            .info-entrega h4 { color: #ffffff; }
+            .info-entrega p { color: #a0a0a0; }
+            .tarjeta-entrega { border-bottom: 1px solid #333; }
+            
+            /* El panel de contadores pasa a un azul más oscuro */
+            .panel-contadores { background: #0d47a1; box-shadow: none; }
 
-            /* Hacemos que la lista ocupe todo el ancho y el mapa quede abajo */
+            /* --- LAYOUT --- */
+            .formulario { display: none; }
+            .btn-toggle-lista { display: block; background: #333; color: white; }
             .contenedor-principal { flex-direction: column; }
             .lista-entregas, .mapa-contenedor { width: 100%; min-width: 100%; }
             
-            /* Ocultamos el mapa por defecto en el celular */
-            .mapa-contenedor { display: none; }
-            
-            /* Achicamos un poco el alto del mapa en el celular */
+            /* Achicamos el alto del mapa */
             #map { height: 400px; }
         }
     </style>
@@ -103,15 +106,32 @@
             <div id="contenedor-lista"></div>
         </div>
 
-        <!-- Mapa -->
-        <div class="mapa-contenedor" id="mapa-padre">
+        <!-- Mapa: Le pusimos 'display: none' para que arranque oculto -->
+        <div class="mapa-contenedor" id="mapa-padre" style="display: none;">
             <div id="map"></div>
         </div>
     </div>
 
     <script>
+        // Detección de celular para arrancar con el mapa oculto/visible
+        const esCelular = window.innerWidth <= 768;
+        
+        if (!esCelular) {
+            // Si es PC, forzamos a que el mapa se vea
+            document.getElementById('mapa-padre').style.display = 'block';
+        }
+
+        // Inicializamos el mapa con el estilo oscuro si es celular
         const map = L.map('map').setView([-27.4692, -58.8306], 13);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
+        
+        // Si es celular, usamos un mapa oscuro (CartoDB Dark Matter), si es PC el clásico
+        const urlMapa = esCelular 
+            ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+            : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+
+        L.tileLayer(urlMapa, { 
+            attribution: '© OpenStreetMap / CartoDB' 
+        }).addTo(map);
 
         let marcadores = [];
         let entregasActuales = [];
@@ -131,7 +151,6 @@
                 mapa.style.display = 'none';
                 btn.innerText = '▼ Mostrar Mapa y Ruta';
             }
-            // Obligamos al mapa a recalcular su tamaño
             setTimeout(() => { map.invalidateSize(); }, 100);
         }
 
@@ -146,7 +165,6 @@
             const response = await fetch('/api/entregas');
             const nuevasEntregas = await response.json();
             
-            // Aviso de nueva entrega
             if (entregasActuales.length > 0 && nuevasEntregas.length > entregasActuales.length) {
                 alert("🔔 ¡ATENCIÓN! La oficina acaba de agregar un nuevo destino.");
             }
@@ -162,11 +180,10 @@
             let bounds = L.latLngBounds();
 
             if (nuevasEntregas.length === 0) {
-                contenedorLista.innerHTML = '<p style="color: #666; text-align: center;">No hay entregas pendientes. ¡Buen trabajo!</p>';
+                contenedorLista.innerHTML = '<p style="color: #888; text-align: center;">No hay entregas pendientes. ¡Buen trabajo!</p>';
             }
 
             nuevasEntregas.forEach(entrega => {
-                // Mapa
                 if (entrega.latitud && entrega.longitud) {
                     const marker = L.marker([entrega.latitud, entrega.longitud], {icon: iconoEntrega}).addTo(map);
                     const botonesHtml = `
@@ -184,7 +201,6 @@
                     }
                 }
 
-                // Lista - MODIFICADO: Dirección grande, nombre abajo
                 const tarjeta = document.createElement('div');
                 tarjeta.className = 'tarjeta-entrega';
                 tarjeta.innerHTML = `
@@ -250,7 +266,7 @@
                 window.rutaActual = L.Routing.control({
                     waypoints: [ L.latLng(latRepartidor, lonRepartidor), L.latLng(lat, lon) ],
                     language: 'es', show: false,
-                    lineOptions: { styles: [{color: 'blue', weight: 5}] },
+                    lineOptions: { styles: [{color: '#00b0ff', weight: 5}] }, // Línea celeste brillante
                     createMarker: function() { return null; }
                 }).addTo(map);
             }, () => {
